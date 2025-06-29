@@ -1,0 +1,112 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Build-Cache
+
+on:
+  workflow_dispatch:
+#  push:
+#    branches: [ "master" ]
+#  pull_request:
+#    branches: [ "master" ]
+    
+env:
+  # Path to the solution file relative to the root of the project.
+  SOLUTION_FILE_PATH: .
+
+  # Configuration type to build.
+  # You can convert this to a build matrix if you need coverage of multiple configuration types.
+  # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+  BUILD_CONFIGURATION: Release
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    environment: Build
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'true'
+        
+    - name: Extract Version
+      id: get_version
+      # ... (此步骤无需改动，保持原样)
+      working-directory: ${{ github.workspace }}
+      shell: powershell
+      run: |
+        # Ensure the file exists before proceeding
+        $resourceFile = ".\OptiScaler\resource.h"
+        if (-Not (Test-Path $resourceFile)) {
+            Write-Error "File not found: $resourceFile"
+            exit 1
+        }
+        function Get-Version-Component {
+            param ([string]$pattern, [string]$replacement)
+            $line = Get-Content $resourceFile | Select-String -Pattern $pattern | Select-Object -First 1
+            if ($line) { return ($line.Line -replace $replacement).Trim() } 
+            else { Write-Error "Pattern not found: $pattern"; exit 1 }
+        }
+        $majorVersion = Get-Version-Component 'VER_MAJOR_VERSION' '#define VER_MAJOR_VERSION\s+'
+        $minorVersion = Get-Version-Component 'VER_MINOR_VERSION' '#define VER_MINOR_VERSION\s+'
+        $hotfixVersion = Get-Version-Component 'VER_HOTFIX_VERSION' '#define VER_HOTFIX_VERSION\s+'
+        $buildVersion = Get-Version-Component 'VER_BUILD_NUMBER' '#define VER_BUILD_NUMBER\s+'
+        $version = "v$majorVersion.$minorVersion.$hotfixVersion-pre$buildVersion"
+        $date = Get-Date -Format "yyyyMMdd"
+        $outputFileName = "OptiScaler_${version}_${date}"
+        Write-Output "Generated Filename: $outputFileName"
+        "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        "filename=$outputFileName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        
+    - name: Debug Outputs
+      run: |
+        echo "Version: ${{ steps.get_version.outputs.version }}"
+        echo "Filename: ${{ steps.get_version.outputs.filename }}"
+        
+    # ==================== 新增优化步骤：缓存 NuGet 包 ====================
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        # 当 vcxproj 或 packages.config 文件改变时，缓存会失效
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.vcxproj', '**/packages.config') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    # ==================== 新增优化步骤：缓存 MSBuild 构建输出 ====================
+    - name: Cache MSBuild output
+      uses: actions/cache@v4
+      id: msbuild-cache # 给这个步骤一个id，方便后续查看是否命中缓存
+      with:
+        path: ${{ github.workspace }}/x64
+        # 当任何 C++ 源文件、头文件或项目文件改变时，缓存会失效
+        key: ${{ runner.os }}-${{ env.BUILD_CONFIGURATION }}-msbuild-${{ hashFiles('**/*.cpp', '**/*.h', '**/*.vcxproj') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.BUILD_CONFIGURATION }}-msbuild-
+          
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Build
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} ${{env.SOLUTION_FILE_PATH}} /verbosity:minimal
+      # 如果没有命中缓存，这个步骤会像以前一样执行完整构建。
+      # 如果命中了缓存，MSBuild 会自动进行增量构建，速度会快很多。
+      
+    - name: Compress the artifact 
+      run: |
+        $zipName = "${{ steps.get_version.outputs.filename }}.7z"
+        7z a -r ${{ github.workspace }}\$zipName ${{ github.workspace }}\x64\Release\a\*.*
+      continue-on-error: false
+        
+    - uses: actions/upload-artifact@v4
+      with:
+        name: '${{ steps.get_version.outputs.filename }}'
+        path: '${{ github.workspace }}\${{ steps.get_version.outputs.filename }}.7z'
+        compression-level: 0
+        if-no-files-found: error

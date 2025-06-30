@@ -27,7 +27,7 @@ jobs:
 
           # 2. 添加上游（原始）仓库的远程地址
           # !!!【请修改这里】!!! 将 URL 替换为真正的上游仓库地址
-          git remote add upstream https://github.com/optiscaler/OptiScale.git
+          git remote add upstream https://github.com/optiscaler/OptiScaler.git
 
           # 3. 从上游仓库拉取最新的代码
           git fetch upstream

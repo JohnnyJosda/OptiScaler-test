@@ -160,7 +160,8 @@ uint64_t hkgetModelBlob(uint32_t preset, uint64_t unknown, uint64_t* source, uin
 
         auto ratio = (float) target / (float) render;
 
-        if (preset == 0 && ratio >= 1.49f)
+        // Include Ultra Quality in the fix as well
+        if (preset == 0 && ratio >= 1.29f)
             preset = 1;
     }
 
@@ -342,7 +343,7 @@ static inline void CheckForGPU()
             {
                 // If GPU Name contains 90XX or GFX12 (Linux) always set it to true
                 if (szName.find(L" 90") != std::wstring::npos || szName.find(L" GFX12") != std::wstring::npos)
-                    Config::Instance()->Fsr4Update = true;
+                    Config::Instance()->Fsr4Update.set_volatile_value(true);
             }
         }
         else
@@ -357,9 +358,6 @@ static inline void CheckForGPU()
 
     factory->Release();
     factory = nullptr;
-
-    if (!Config::Instance()->Fsr4Update.has_value())
-        Config::Instance()->Fsr4Update = false;
 
     LOG_INFO("Fsr4Update: {}", Config::Instance()->Fsr4Update.value_or_default());
 }
@@ -387,6 +385,25 @@ inline static HRESULT STDMETHODCALLTYPE hkAmdExtD3DCreateInterface(IUnknown* pOu
 
     if (o_AmdExtD3DCreateInterface != nullptr)
         return o_AmdExtD3DCreateInterface(pOuter, riid, ppvObject);
+
+    return E_NOINTERFACE;
+}
+
+inline static HRESULT STDMETHODCALLTYPE customAmdExtD3DCreateInterface(IUnknown* pOuter, REFIID riid, void** ppvObject)
+{
+    // If querying IAmdExtFfxApi
+    if (riid == __uuidof(IAmdExtFfxApi))
+    {
+        if (_amdExtFfxApi == nullptr)
+            _amdExtFfxApi = new AmdExtFfxApi();
+
+        // Return custom one
+        *ppvObject = _amdExtFfxApi;
+
+        LOG_INFO("Custom IAmdExtFfxApi queried, returning custom AmdExtFfxApi");
+
+        return S_OK;
+    }
 
     return E_NOINTERFACE;
 }

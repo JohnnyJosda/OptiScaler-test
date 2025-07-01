@@ -1,80 +1,45 @@
-# GitHub Action for syncing a fork with its upstream repository and triggering a build on change
-name: Sync Fork and Build if Changed
+name: Sync Fork and Trigger Build
 
 on:
   schedule:
-    # 每六小时执行一次
     - cron: '0 */6 * * *'
-  workflow_dispatch: # 允许手动触发
+  workflow_dispatch:
 
 jobs:
-  sync-and-build:
+  sync-and-dispatch:
     runs-on: ubuntu-latest
+
     steps:
-      # 步骤 1: 检出你的 fork 仓库
-      - name: Checkout this repository
+      - name: Checkout fork
         uses: actions/checkout@v4
         with:
-          # 我们需要完整的历史记录来正确合并
           fetch-depth: 0
-          # 需要 PAT 来获得推送和触发其他 workflow 的权限
           token: ${{ secrets.SECRET }}
 
-      # 步骤 2: 执行同步并检查是否有变更
       - name: Merge Upstream and Check for Changes
-        id: sync # 给这个步骤一个ID，方便后续步骤引用它的输出
+        id: sync
         run: |
-          # 配置 Git 用户信息，这样才能创建合并提交
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-
-          # 记录合并前的 HEAD commit SHA
           BEFORE_SHA=$(git rev-parse HEAD)
-          echo "Commit SHA before merge: $BEFORE_SHA"
-
-          # 添加上游（原始）仓库的远程地址
-          # !!!【请修改这里】!!! 将 URL 替换为真正的上游仓库地址
           git remote add upstream https://github.com/optiscaler/OptiScaler.git
-
-          # 从上游仓库拉取最新的代码
           git fetch upstream
-
-          # 合并上游仓库的 main 分支到你自己的 main 分支
-          # !!!【请修改这里】!!! 如果分支不是 main，请修改为 master 或其他
-          git merge upstream/master
-
-          # 记录合并后的 HEAD commit SHA
+          git merge upstream/master || exit 0
           AFTER_SHA=$(git rev-parse HEAD)
-          echo "Commit SHA after merge: $AFTER_SHA"
+          echo "changes_detected=$([ \"$BEFORE_SHA\" != \"$AFTER_SHA\" ] && echo true || echo false)" >> $GITHUB_OUTPUT
 
-          # 比较 SHA，如果不同，则说明有新的变更
-          if [ "$BEFORE_SHA" != "$AFTER_SHA" ]; then
-            echo "New changes detected from upstream."
-            # 设置一个输出变量，供后续步骤使用
-            echo "changes_detected=true" >> $GITHUB_OUTPUT
-          else
-            echo "No new changes from upstream. Fork is up-to-date."
-            echo "changes_detected=false" >> $GITHUB_OUTPUT
-          fi
-        
-      # 步骤 3: 如果有变更，则推送到你的 fork 仓库
       - name: Push Changes
-        # 只有在 'sync' 步骤的输出 'changes_detected' 为 'true' 时才运行
         if: steps.sync.outputs.changes_detected == 'true'
-        run: |
-          # !!!【请修改这里】!!! 如果分支不是 main，请修改为 master 或其他
-          git push origin master
+        run: git push origin master
 
-      # 步骤 4: 如果有变更，则触发 'Build-NonSignature' workflow
-      - name: Trigger Build Workflow
-        # 同样，只有在检测到变更时才运行
+      - name: Dispatch Build Event
         if: steps.sync.outputs.changes_detected == 'true'
         uses: peter-evans/repository-dispatch@v3
         with:
-          # 要触发的 workflow 的文件名。请确保文件名正确。
-          workflow: Build-NonSignature.yml 
-          # 使用你的 PAT，因为它需要权限来触发 workflow
           token: ${{ secrets.SECRET }}
-          # 在哪个分支上触发，通常是你刚刚同步的分支
-          # !!!【请修改这里】!!! 如果分支不是 main，请修改为 master 或其他
-          ref: master
+          event-type: sync-upstream
+          client-payload: |
+            {
+              "ref": "refs/heads/master",
+              "sha": "${{ steps.sync.outputs.changes_detected }}"
+            }

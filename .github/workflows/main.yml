@@ -3,8 +3,8 @@ name: Sync Fork (Merge)
 
 on:
   schedule:
-    # 每六小时执行一次
-    - cron: '0 */6 * * *'
+    # 每四小时执行一次
+    - cron: '0 */4 * * *'
   workflow_dispatch: # 允许手动触发
 
 jobs:

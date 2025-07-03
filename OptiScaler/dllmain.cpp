@@ -949,6 +949,9 @@ static void CheckQuirks()
     if (quirks & GameQuirk::ForceAutoExposure)
         Config::Instance()->AutoExposure.set_volatile_value(true);
 
+    if (quirks & GameQuirk::DisableUseFsrInputValues)
+        Config::Instance()->FsrUseFsrInputValues.set_volatile_value(false);
+
     if (quirks & GameQuirk::DisableDxgiSpoofing && !Config::Instance()->DxgiSpoofing.has_value())
         Config::Instance()->DxgiSpoofing.set_volatile_value(false);
 
@@ -1092,6 +1095,10 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         spdlog::info("");
         State::Instance().isRunningOnLinux = IsRunningOnWine();
         State::Instance().isRunningOnDXVK = State::Instance().isRunningOnLinux;
+
+        // Disable splash for Linux
+        if (!Config::Instance()->DisableSplash.has_value())
+            Config::Instance()->DisableSplash.set_volatile_value(State::Instance().isRunningOnLinux);
 
         // Check if real DLSS available
         if (Config::Instance()->DLSSEnabled.value_or_default())

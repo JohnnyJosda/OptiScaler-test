@@ -15,6 +15,7 @@ enum class GameQuirk : uint64_t
     ForceAutoExposure,
     DisableReactiveMasks,
     DisableDxgiSpoofing,
+    DisableUseFsrInputValues,
 
     // Quirks that are applied deeper in code
     CyberpunkHudlessStateOverride,
@@ -57,7 +58,6 @@ static const QuirkEntry quirkTable[] = {
     // Crapcom Games, DLSS without dxgi spoofing needs restore compute in those
     QUIRK_ENTRY("kunitsugami.exe", GameQuirk::RestoreComputeSigOnNonNvidia, GameQuirk::DisableDxgiSpoofing),
     QUIRK_ENTRY("kunitsugamidemo.exe", GameQuirk::RestoreComputeSigOnNonNvidia, GameQuirk::DisableDxgiSpoofing),
-    QUIRK_ENTRY("monsterhunterrise.exe", GameQuirk::RestoreComputeSigOnNonNvidia, GameQuirk::DisableDxgiSpoofing),
     QUIRK_ENTRY("monsterhunterwilds.exe", GameQuirk::RestoreComputeSigOnNonNvidia, GameQuirk::DisableDxgiSpoofing),
 
     // Dead Rising Deluxe Remaster (including the demo)
@@ -78,7 +78,7 @@ static const QuirkEntry quirkTable[] = {
     QUIRK_ENTRY("towers-win64-shipping.exe", GameQuirk::DisableFSR2Inputs, GameQuirk::DisableFSR3Inputs),
 
     // Avatar: Frontiers of Pandora
-    QUIRK_ENTRY("afop.exe", GameQuirk::DisableFSR2Inputs, GameQuirk::DisableFSR3Inputs),
+    QUIRK_ENTRY("afop.exe", GameQuirk::DisableFSR2Inputs, GameQuirk::DisableFSR3Inputs, GameQuirk::DisableDxgiSpoofing),
 
     // Forza Motorsport 8
     QUIRK_ENTRY("forza_steamworks_release_final.exe", GameQuirk::DisableFSR2Inputs,
@@ -98,6 +98,9 @@ static const QuirkEntry quirkTable[] = {
     // Bloom and Rage
     QUIRK_ENTRY("bloom&rage.exe", GameQuirk::DisableFSR2Inputs, GameQuirk::DisableFSR3Inputs),
 
+    // 171
+    QUIRK_ENTRY("bcg-win64-shipping.exe", GameQuirk::DisableFSR2Inputs, GameQuirk::DisableFSR3Inputs),
+
     // Star Wars: Outlaws
     QUIRK_ENTRY("outlaws.exe", GameQuirk::DisableFSR2Inputs, GameQuirk::DisableFSR3Inputs),
     QUIRK_ENTRY("outlaws_plus.exe", GameQuirk::DisableFSR2Inputs, GameQuirk::DisableFSR3Inputs),
@@ -111,8 +114,11 @@ static const QuirkEntry quirkTable[] = {
     // Dead Island 2
     QUIRK_ENTRY("deadisland-win64-shipping.exe", GameQuirk::DisableReactiveMasks),
 
-    // STAR WARS Jedi: Survivor™
+    // STAR WARS Jedi: Survivor
     QUIRK_ENTRY("jedisurvivor.exe", GameQuirk::ForceAutoExposure),
+
+    // The Callisto Protocol
+    QUIRK_ENTRY("thecallistoprotocol-win64-shipping.exe", GameQuirk::DisableUseFsrInputValues),
 
     // Self-explanatory
     QUIRK_ENTRY("cyberpunk2077.exe", GameQuirk::CyberpunkHudlessStateOverride, GameQuirk::ForceNoOptiFG,
@@ -173,6 +179,8 @@ static void printQuirks(flag_set<GameQuirk>& quirks)
         spdlog::info("Quirk: Enabling restore compute signature on AMD/Intel");
     if (quirks & GameQuirk::DisableDxgiSpoofing)
         spdlog::info("Quirk: Dxgi spoofing disabled by default");
+    if (quirks & GameQuirk::DisableDxgiSpoofing)
+        spdlog::info("Quirk: Disable Use FSR Input Values");
 
     return;
 }
